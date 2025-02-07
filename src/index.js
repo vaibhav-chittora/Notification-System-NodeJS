@@ -1,6 +1,7 @@
 import express from "express";
 import connectDB from "./config/db.js";
 import { PORT } from "./config/serverConfig.js";
+import notificationRoutes from "./routes/notification.js";
 
 const app = express();
 
