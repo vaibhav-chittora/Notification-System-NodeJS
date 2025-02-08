@@ -10,8 +10,17 @@ export const createNotification = async (req, res) => {
       priority,
       sendAt,
     });
-    res.status(201).json(notification);
+    return res.status(201).json({
+      success: true,
+      message: "Notification created successfully",
+      data: notification,
+    });
   } catch (error) {
-    res.status(500).json({ error: "Failed to create notification" });
+    console.log("error in createNotification controller", error);
+    return res.status(500).json({
+      success: false,
+      message: "Failed to create notification",
+      error: "Failed to create notification",
+    });
   }
 };

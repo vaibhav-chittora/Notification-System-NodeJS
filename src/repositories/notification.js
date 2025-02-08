@@ -14,3 +14,11 @@ export const getPendingNotifications = async () => {
 export const updateNotificationStatus = async (id, status) => {
   return await Notification.findByIdAndUpdate(id, { status }, { new: true });
 };
+
+export const getRecentNotifications = async (userId, timeFrame = 3600000) => {
+  const cutoff = new Date(Date.now() - timeFrame);
+  return await Notification.find({
+    userId,
+    createdAt: { $gte: cutoff },
+  });
+};
