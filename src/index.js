@@ -1,34 +1,33 @@
 import express from "express";
-import connectDB from "./config/db.js";
-import { PORT } from "./config/serverConfig.js";
 import http from "http";
+import cors from "cors";
+import connectDB from "./config/db.js";
 import setupSocket from "./sockets/socket.js";
 import notificationRoutes from "./routes/notification.js";
-import analyticsRoutes from "./routes/analytics.js";
+import { PORT } from "./config/serverConfig.js";
 
 const app = express();
 const server = http.createServer(app);
-const io = setupSocket(server);
+const io = setupSocket(server); // **Initialize WebSocket**
 
+app.use(cors());
 app.use(express.json());
-app.use(express.urlencoded({ extended: true }));
 
 // Routes
 app.use("/api/notifications", notificationRoutes);
-app.use("/api/analytics", analyticsRoutes);
 
 app.get("/", (req, res) => {
   res.send("Hello World");
 });
 
-// Emit push notification when a new notification is sent
-const sendPushNotification = (message) => {
+// **Emit WebSocket Events**
+export const sendPushNotification = (message) => {
+  console.log("📢 Emitting WebSocket event: newNotification");
   io.emit("newNotification", { message });
 };
 
+// Start Server
 server.listen(PORT, () => {
-  console.log(`🚀 Server is running on port ${PORT}`);
+  console.log(`🚀 Server running on port ${PORT}`);
   connectDB();
 });
-
-export { sendPushNotification };

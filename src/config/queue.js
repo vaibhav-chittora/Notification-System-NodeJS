@@ -1,12 +1,9 @@
 import Queue from "bull";
-import {
-  updateNotificationStatus,
-  getPendingNotifications,
-} from "../repositories/notification.js";
-import sendEmail from "../utils/email.js";
 import Notification from "../schema/notification.js";
+import sendEmail from "../utils/email.js";
+import { sendPushNotification } from "../index.js"; // **Import WebSocket function**
 
-// Redis Connection
+// Redis Queue Setup
 const notificationQueue = new Queue("notifications", {
   redis: {
     host: process.env.REDIS_HOST,
@@ -14,47 +11,49 @@ const notificationQueue = new Queue("notifications", {
   },
 });
 
-// Job Processor
+// **Job Processor - Send Notifications**
 notificationQueue.process(async (job) => {
   console.log(`🚀 Processing Job: ${job.id}`, job.data);
 
   const { notificationId } = job.data;
-  const notification = await updateNotificationStatus(notificationId, "sent");
+  const notification = await Notification.findById(notificationId);
 
+  if (!notification) {
+    console.log("❌ Notification not found in DB.");
+    return;
+  }
+
+  // **Send Email Notification**
   if (notification.type === "email") {
     await sendEmail(notification.message);
   }
 
+  // **Emit WebSocket Push Notification**
+  console.log("📢 Sending WebSocket Notification");
+  sendPushNotification(notification.message);
+
+  // **Update Status in MongoDB**
+  await Notification.findByIdAndUpdate(notificationId, { status: "sent" });
+
   console.log(`✅ Notification Sent: ${notificationId}`);
 });
 
-// **Scheduled Job: Check Pending Notifications Every Minute**
-
+// **Check Pending Notifications Every Minute**
 setInterval(async () => {
-  const now = new Date();
-  const nextHour = new Date();
-  nextHour.setHours(now.getHours() + 1, 0, 0, 0);
-
-  // Fetch all low-priority notifications scheduled within the next hour
-  const lowPriorityNotifications = await Notification.find({
-    priority: "low",
-    sendAt: { $gte: now, $lt: nextHour },
+  const pendingNotifications = await Notification.find({
+    status: "pending",
+    sendAt: { $lte: new Date() },
   });
 
-  if (lowPriorityNotifications.length > 1) {
-    const summaryMessage = lowPriorityNotifications
-      .map((n) => n.message)
-      .join("\n");
+  pendingNotifications.forEach((notification) => {
+    notificationQueue.add("sendNotification", {
+      notificationId: notification._id,
+    });
+  });
 
-    // Send as a single batch notification
-    await sendEmail(summaryMessage);
-    await Notification.updateMany(
-      { _id: { $in: lowPriorityNotifications.map((n) => n._id) } },
-      { status: "sent" }
-    );
-
-    console.log("📩 Batched Low-Priority Notifications Sent");
-  }
-}, 60000);
+  console.log(
+    `📅 Scheduled Notifications Queued: ${pendingNotifications.length}`
+  );
+}, 60000); // **Runs every 60 seconds**
 
 export default notificationQueue;
